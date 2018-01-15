@@ -1,0 +1,118 @@
+---
+title: Plotly HW Assignment Jan 2018 - Please page down for interactive plot""
+author: "Jean Pelkey"
+date: "January 13, 2018"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("plotly", repos = "http://cran.us.r-project.org")
+install.packages("ggplot2", dependencies=TRUE, repos = "http://cran.us.r-project.org") 
+install.packages("readr", repos = "http://cran.us.r-project.org")
+install.packages("data.table", repos = "http://cran.us.r-project.org")
+install.packages("dplyr", repos = "http://cran.us.r-project.org")
+install.packages("Rcpp", dependencies=TRUE, repos = "http://cran.us.r-project.org")
+library(readr)
+library(dplyr)
+require(ggplot2)
+require(Rcpp)
+require(plotly)
+require(data.table)
+```
+
+```{r, echo=FALSE, include=FALSE, warning=FALSE}
+StormData <- read_csv("~/R/Reproducible Research/Peer Assessment2/repdata_data_StormData.csv.bz2")
+Col.To.Keep<-c("BGN_DATE","EVTYPE","FATALITIES","INJURIES","PROPDMG","PROPDMGEXP","CROPDMG",
+               "CROPDMGEXP")
+Storm.Data.Reduced<-StormData[!(StormData$FATALITIES==0 & StormData$INJURIES==0 
+                                & StormData$PROPDMG<=0 & StormData$CROPDMG<=0),]
+Storm.Data.Reduced<-subset(Storm.Data.Reduced, select = Col.To.Keep)
+
+Storm.Data.Reduced$Year <- as.numeric(format(as.Date(Storm.Data.Reduced$BGN_DATE, 
+                                                     format = "%m/%d/%Y"), "%Y"))
+Storm.Data.Reduced<-Storm.Data.Reduced[Storm.Data.Reduced$Year>=1990,]
+
+Storm.Data.Reduced$NewEventType<-NA
+
+Storm.Data.Reduced[grepl("Avalanche|Avalance|Blizzard|Hail|Heavy Snow|Snow|Ice Storm|Ice|Icy|Lake-Effect Snow|
+     Marine Hail|Sleet|Wintry",      Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), "NewEventType"] <- "Snow & Ice"
+Storm.Data.Reduced[grepl("Flood|Fld",Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+     "NewEventType"] <- "Flood"
+Storm.Data.Reduced[grepl("Chill|Frost|Freez|Winter|Cold", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+      "NewEventType"] <- "Winter Weather"
+Storm.Data.Reduced[grepl("Tornado|Funnel", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+      "NewEventType"] <- "Tornado"
+Storm.Data.Reduced[grepl("Volcano Ash", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+      "NewEventType"] <- "Volcano"
+Storm.Data.Reduced[grepl("Dense Smoke|Wildfire|FIre", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+     "NewEventType"] <- "Fire"
+Storm.Data.Reduced[grepl("Hurricane|Tropical|Typhoon|Coastal", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+    "NewEventType"] <- "Hurricane"
+Storm.Data.Reduced[grepl("Wind", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+    "NewEventType"] <- "Wind"
+Storm.Data.Reduced[grepl("Surge|Tsunami|Surf|Surf|Seas|Swells|Water|Waves|Rip", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+    "NewEventType"] <- "Storm Surge"
+Storm.Data.Reduced[grepl("Torrential|Thunderstorm|Rain|Micro", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+    "NewEventType"] <- "Rain & Storm"
+Storm.Data.Reduced[grepl("Dust", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+    "NewEventType"] <- "Dust Storm"
+Storm.Data.Reduced[grepl("Fog", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+    "NewEventType"] <- "Fog"
+Storm.Data.Reduced[grepl("Heat", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+    "NewEventType"] <- "Heat"
+Storm.Data.Reduced[grepl("Lightning", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+    "NewEventType"] <- "Lightning"
+Storm.Data.Reduced[grepl("Landslide|Mudslide", Storm.Data.Reduced$EVTYPE, ignore.case = TRUE), 
+    "NewEventType"] <- "Landslide"
+
+Storm.Data.Reduced$PropertyDamExp<-NA
+Storm.Data.Reduced[grepl("B|b", Storm.Data.Reduced$PROPDMGEXP, ignore.case = TRUE), 
+                   "PropertyDamExp"]<-1e+09
+Storm.Data.Reduced[grepl("M|m|6", Storm.Data.Reduced$PROPDMGEXP, ignore.case = TRUE), 
+                   "PropertyDamExp"]<-1e+06
+Storm.Data.Reduced[grepl("K|k|3", Storm.Data.Reduced$PROPDMGEXP, ignore.case = TRUE), 
+                   "PropertyDamExp"]<-1e+03
+Storm.Data.Reduced[grepl("0", Storm.Data.Reduced$PROPDMGEXP, ignore.case = TRUE), 
+                   "PropertyDamExp"]<-1e+00
+Storm.Data.Reduced[grepl("4", Storm.Data.Reduced$PROPDMGEXP, ignore.case = TRUE), 
+                   "PropertyDamExp"]<-1e+04
+Storm.Data.Reduced[grepl("5", Storm.Data.Reduced$PROPDMGEXP, ignore.case = TRUE), 
+                   "PropertyDamExp"]<-1e+05
+Storm.Data.Reduced[grepl("2", Storm.Data.Reduced$PROPDMGEXP, ignore.case = TRUE), 
+                   "PropertyDamExp"]<-1e+02
+Storm.Data.Reduced[grepl("7", Storm.Data.Reduced$PROPDMGEXP, ignore.case = TRUE), 
+                   "PropertyDamExp"]<-1e+07
+
+Storm.Data.Reduced$PROPDMG<-Storm.Data.Reduced$PROPDMG*Storm.Data.Reduced$PropertyDamExp/1e+06
+
+Storm.Data.Reduced$PropertyCropExp<-NA
+Storm.Data.Reduced[grepl("B|b", Storm.Data.Reduced$CROPDMGEXP, ignore.case = TRUE), 
+                   "CropDamExp"]<-1e+09
+Storm.Data.Reduced[grepl("M|m", Storm.Data.Reduced$CROPDMGEXP, ignore.case = TRUE), 
+                   "CropDamExp"]<-1e+06
+Storm.Data.Reduced[grepl("K|k", Storm.Data.Reduced$CROPDMGEXP, ignore.case = TRUE), 
+                   "CropDamExp"]<-1e+03
+
+Storm.Data.Reduced$CROPDMG<-Storm.Data.Reduced$CROPDMG*Storm.Data.Reduced$CropDamExp/1e+06
+
+StormDataImpact<-aggregate(cbind(Storm.Data.Reduced$FATALITIES,Storm.Data.Reduced$INJURIES,
+            Storm.Data.Reduced$PROPDMG,Storm.Data.Reduced$CROPDMG),by=list(Storm.Data.Reduced$NewEventType), 
+            FUN=sum, na.rm=TRUE)
+names(StormDataImpact)<-c("Event.Type","Total.Fatalities","Total.Injuries",
+                          "Total.Property.Damage","Total.Crop.Damage")
+StormDataImpact$Total.Property.Damage <-round(StormDataImpact$Total.Property.Damage,digits=2)
+StormDataImpact$Total.Crop.Damage <-round(StormDataImpact$Total.Crop.Damage,digits=2)
+```
+
+## Jean Pelkey - Plotly Homework
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+Prop.Plot<-ggplot(data=StormDataImpact) +
+  geom_bar(aes(reorder(Event.Type, -Total.Property.Damage), Total.Property.Damage, fill=Total.Property.Damage),col="red", fill= "red", stat="identity") +
+  labs(x="Event Type", y="Total Property Damage ($Million) by Event Type")+ theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+
+today<-Sys.Date()
+print(today)
+ggplotly(Prop.Plot)
+```
